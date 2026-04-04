@@ -6,7 +6,7 @@ import operator
 
 from agents.agent1_orchestrator import run_agent1
 from agents.agent2_architect import run_agent2
-from agents.agent3_developer import run_agent3
+from agents.agent3_developer import run_agent3, generate_project_name
 from agents.agent4_qa import run_agent4
 
 load_dotenv()
@@ -21,6 +21,7 @@ class AgentState(TypedDict):
     qa_status: str
     retry_count: int
     human_approved: bool
+    project_folder: str  # NEW: tracks the output project folder
 
 # Agent node functions
 def orchestrator_node(state: AgentState) -> AgentState:
@@ -45,9 +46,19 @@ Please fix all the issues mentioned.
 """
     else:
         input_to_dev = state["technical_design"]
-    
+
     code = run_agent3(input_to_dev)
-    return {**state, "generated_code": code, "retry_count": state.get("retry_count", 0) + 1}
+
+    # Derive the project folder name the same way agent3 does
+    project_name = generate_project_name(input_to_dev)
+    project_folder = os.path.join("output", project_name)
+
+    return {
+        **state,
+        "generated_code": code,
+        "project_folder": project_folder,
+        "retry_count": state.get("retry_count", 0) + 1
+    }
 
 def qa_node(state: AgentState) -> AgentState:
     result = run_agent4(state["generated_code"])
@@ -61,22 +72,29 @@ def human_approval_node(state: AgentState) -> AgentState:
     print("\n" + "=" * 50)
     print("👤 HUMAN APPROVAL REQUIRED")
     print("=" * 50)
-    print("\nQA has PASSED. Please review the generated code.")
-    print(f"Code saved at: output/word_to_pdf.py")
+
+    if state["qa_status"] == "PASS":
+        print("\nQA has PASSED. Please review the generated code.")
+    else:
+        print("\n⚠️ Max retries reached. QA did not fully pass. Please review the generated code carefully.")
+
+    print(f"📁 Project folder: {state.get('project_folder', 'output/')}")
     print("\nDo you approve this implementation?")
     approval = input("Type 'yes' to approve or 'no' to reject: ")
     approved = approval.lower() == "yes"
+
     if approved:
         print("\n✅ Approved! Pipeline complete.")
     else:
         print("\n❌ Rejected. Stopping pipeline.")
+
     return {**state, "human_approved": approved}
 
 # Routing logic
 def route_after_qa(state: AgentState) -> str:
     if state["qa_status"] == "PASS":
         return "human_approval"
-    elif state.get("retry_count", 0) >= 2:
+    elif state.get("retry_count", 0) >= 3:
         print("\n⚠️ Max retries reached. Moving to human approval anyway.")
         return "human_approval"
     else:
@@ -86,14 +104,14 @@ def route_after_qa(state: AgentState) -> str:
 # Build the graph
 def build_pipeline():
     graph = StateGraph(AgentState)
-    
+
     # Add nodes
     graph.add_node("orchestrator", orchestrator_node)
     graph.add_node("architect", architect_node)
     graph.add_node("developer", developer_node)
     graph.add_node("qa", qa_node)
     graph.add_node("human_approval", human_approval_node)
-    
+
     # Add edges
     graph.set_entry_point("orchestrator")
     graph.add_edge("orchestrator", "architect")
@@ -104,7 +122,7 @@ def build_pipeline():
         "human_approval": "human_approval"
     })
     graph.add_edge("human_approval", END)
-    
+
     return graph.compile()
 
 # Run the pipeline
@@ -112,9 +130,9 @@ if __name__ == "__main__":
     print("\n" + "=" * 50)
     print("🚀 AGENTIC DEV PLATFORM")
     print("=" * 50)
-    
+
     requirement = input("\nEnter your requirement: ")
-    
+
     initial_state: AgentState = {
         "requirement": requirement,
         "project_brief": "",
@@ -123,17 +141,18 @@ if __name__ == "__main__":
         "qa_review": "",
         "qa_status": "",
         "retry_count": 0,
-        "human_approved": False
+        "human_approved": False,
+        "project_folder": ""
     }
-    
+
     pipeline = build_pipeline()
     final_state = pipeline.invoke(initial_state)
-    
+
     print("\n" + "=" * 50)
     print("🏁 PIPELINE COMPLETE")
     print("=" * 50)
     if final_state["human_approved"]:
         print("✅ Code approved and ready to use!")
-        print("📁 Find your code at: output/word_to_pdf.py")
+        print(f"📁 Find your project at: {final_state.get('project_folder', 'output/')}")
     else:
         print("❌ Code was not approved.")
