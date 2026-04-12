@@ -1,15 +1,12 @@
 """
 agent5_runtime_fixer.py
-Runtime error handling agent that:
-1. Installs dependencies from requirements.txt automatically
-2. Checks all Python files compile without errors
-3. Attempts a test run and catches runtime errors
-4. Uses Claude to analyze errors and decide fix strategy:
-   - Missing package → auto install → retry
-   - Code bug → send back to Agent 3 → retry
-   - Needs user input → ask user
-   - Unknown → show clear instructions
-Max 3 fix attempts before escalating to user.
+Runtime Fixer Agent that:
+1. Validates ANY generated Python project after human approval
+2. Auto-installs missing dependencies
+3. Checks compilation of all Python files
+4. Attempts test run and fixes errors automatically
+5. Uses Claude to analyze errors and decide fix strategy
+6. Can run standalone to fix errors without re-running full pipeline
 """
 
 import os
@@ -27,9 +24,7 @@ MAX_FIX_ATTEMPTS = 3
 
 
 def run_command(cmd: list, cwd: str = None) -> tuple:
-    """
-    Run a shell command and return (returncode, stdout, stderr).
-    """
+    """Run a shell command. Returns (returncode, stdout, stderr)."""
     result = subprocess.run(
         cmd,
         cwd=cwd,
@@ -40,10 +35,7 @@ def run_command(cmd: list, cwd: str = None) -> tuple:
 
 
 def install_requirements(project_folder: str) -> tuple:
-    """
-    Auto-install from requirements.txt.
-    Returns (success, output)
-    """
+    """Auto-install from requirements.txt. Returns (success, output)."""
     req_path = os.path.join(project_folder, "requirements.txt")
     if not os.path.exists(req_path):
         return True, "No requirements.txt found — skipping."
@@ -62,10 +54,7 @@ def install_requirements(project_folder: str) -> tuple:
 
 
 def check_compilation(project_folder: str) -> tuple:
-    """
-    Check all .py files in src/ for syntax errors.
-    Returns (success, error_details)
-    """
+    """Check all .py files in src/ for syntax errors. Returns (success, errors)."""
     print("\n🔍 Checking compilation of all Python files...")
     src_folder = os.path.join(project_folder, "src")
     if not os.path.exists(src_folder):
@@ -84,7 +73,7 @@ def check_compilation(project_folder: str) -> tuple:
                     errors.append(f"{full_path}:\n{stderr}")
 
     if errors:
-        print(f"   ❌ Compilation errors found in {len(errors)} file(s).")
+        print(f"   ❌ Compilation errors in {len(errors)} file(s).")
         return False, "\n".join(errors)
     else:
         print("   ✅ All files compiled successfully.")
@@ -92,34 +81,36 @@ def check_compilation(project_folder: str) -> tuple:
 
 
 def attempt_test_run(project_folder: str) -> tuple:
-    """
-    Try to run the project's src/main.py as a module.
-    Returns (success, stdout, stderr)
-    We use a timeout and expect it to either succeed or fail fast.
-    """
+    """Try running the project with --help to check imports work."""
     print("\n🚀 Attempting test run...")
     returncode, stdout, stderr = run_command(
         [sys.executable, "-m", "src.main", "--help"],
         cwd=project_folder
     )
 
-    # --help usually exits with 0 or 1 but shows if imports work
-    combined_error = stderr + stdout
-    if "Error" in combined_error or "Traceback" in combined_error:
-        # Check if it's just a missing argument (which means it ran fine)
-        if "ModuleNotFoundError" in combined_error or "ImportError" in combined_error or \
-           "pydantic" in combined_error.lower() or "cannot" in combined_error.lower():
+    combined = stderr + stdout
+    # These indicate real import/module failures
+    failure_indicators = [
+        "ModuleNotFoundError",
+        "ImportError",
+        "pydantic",
+        "cannot import",
+        "No module named",
+        "Traceback"
+    ]
+    for indicator in failure_indicators:
+        if indicator.lower() in combined.lower():
             return False, stdout, stderr
+
     print("   ✅ Test run completed without import/module errors.")
     return True, stdout, stderr
 
 
 def analyze_error_with_claude(error_text: str, project_folder: str) -> dict:
     """
-    Use Claude to analyze the error and decide what to do.
-    Returns dict with keys: action, packages_to_install, fix_instructions, question_for_user
+    Use Claude to analyze ANY runtime error and decide fix strategy.
+    Works for any domain — file processing, APIs, databases, etc.
     """
-    # Read current files for context
     file_summary = ""
     src_folder = os.path.join(project_folder, "src")
     if os.path.exists(src_folder):
@@ -134,30 +125,39 @@ def analyze_error_with_claude(error_text: str, project_folder: str) -> dict:
             {
                 "role": "user",
                 "content": f"""You are a Python runtime error analyst.
+You handle errors from ANY kind of Python project — file processors, APIs,
+scrapers, CLI tools, data pipelines, utilities, and more.
 
-A generated Python project at: {project_folder}
-Has these files:
+Project folder: {project_folder}
+Project files:
 {file_summary}
 
-Produced this error:
+Error encountered:
 {error_text}
 
-Analyze the error and respond in EXACTLY this JSON format, nothing else:
+Analyze and respond in EXACTLY this JSON format, nothing else:
 
 {{
   "action": "install_package" | "fix_code" | "ask_user" | "show_instructions",
   "packages_to_install": [],
-  "fix_description": "<brief description of what needs to be fixed>",
-  "fix_instructions": "<step by step instructions for the user if action is show_instructions>",
-  "question_for_user": null | "<question to ask user if action is ask_user>",
+  "fix_description": "<brief description of what needs fixing>",
+  "fix_instructions": "<step by step instructions if action is show_instructions>",
+  "question_for_user": null | "<specific question if action is ask_user>",
   "is_fixable_automatically": true | false
 }}
 
-Action rules:
-- "install_package": error is due to missing Python package(s) — list them in packages_to_install
-- "fix_code": error is a code bug that needs regeneration (compilation error, logic error, wrong import)
-- "ask_user": need more info from user to fix (missing API key, missing file, missing env var)
-- "show_instructions": error requires manual steps outside Python (OS config, external service, etc.)
+ACTION RULES:
+- "install_package": missing Python package — list exact pip install names
+- "fix_code": code bug needing regeneration (wrong import, missing function, syntax)
+- "ask_user": need info from user (missing API key, missing input file, missing env var)
+- "show_instructions": manual steps needed (OS config, external service setup, etc.)
+
+IMPORTANT:
+- For OS-level dependencies (Word, LibreOffice, etc.) → use show_instructions
+  AND suggest a pure-Python alternative library in fix_instructions
+- For pydantic BaseSettings errors → use fix_code, mention use os.getenv() instead
+- For win32com errors → use fix_code, mention use python-docx + reportlab instead
+- Be specific about package names (e.g. "python-dotenv" not "dotenv")
 
 Return ONLY the JSON."""
             }
@@ -185,12 +185,12 @@ Return ONLY the JSON."""
 def install_missing_package(packages: list) -> bool:
     """Install one or more missing packages."""
     for package in packages:
-        print(f"\n📦 Auto-installing missing package: {package}")
+        print(f"\n📦 Auto-installing: {package}")
         returncode, stdout, stderr = run_command(
             [sys.executable, "-m", "pip", "install", package]
         )
         if returncode == 0:
-            print(f"   ✅ {package} installed successfully.")
+            print(f"   ✅ {package} installed.")
         else:
             print(f"   ❌ Failed to install {package}: {stderr}")
             return False
@@ -200,10 +200,7 @@ def install_missing_package(packages: list) -> bool:
 def run_agent5(project_folder: str, generated_code: str = "") -> dict:
     """
     Main entry point for the Runtime Fixer agent.
-
-    Args:
-        project_folder: Path to the generated project folder
-        generated_code: Combined code string (for passing back to Agent 3 if needed)
+    Validates and fixes any generated Python project.
 
     Returns:
         dict with keys: success, needs_code_fix, fix_context, instructions
@@ -222,11 +219,10 @@ def run_agent5(project_folder: str, generated_code: str = "") -> dict:
         }
 
     # Step 1: Install requirements
-    install_success, install_output = install_requirements(project_folder)
+    install_requirements(project_folder)
 
     # Step 2: Check compilation
     compile_success, compile_errors = check_compilation(project_folder)
-
     if not compile_success:
         print(f"\n❌ Compilation errors detected. Analyzing...")
         analysis = analyze_error_with_claude(compile_errors, project_folder)
@@ -234,7 +230,7 @@ def run_agent5(project_folder: str, generated_code: str = "") -> dict:
             return {
                 "success": False,
                 "needs_code_fix": True,
-                "fix_context": f"Compilation errors found:\n{compile_errors}\n\nFix needed: {analysis['fix_description']}",
+                "fix_context": f"Compilation errors:\n{compile_errors}\n\nFix: {analysis['fix_description']}",
                 "instructions": ""
             }
 
@@ -253,29 +249,29 @@ def run_agent5(project_folder: str, generated_code: str = "") -> dict:
             print("\n📋 HOW TO RUN YOUR PROJECT:")
             print("-" * 50)
             print(f"1. cd {project_folder}")
-            print(f"2. Set required environment variables (check README.md)")
-            print(f"3. pip install -r requirements.txt")
-            print(f"4. py -m src.main <your_arguments>")
+            print(f"2. Check README.md for required environment variables")
+            print(f"3. Copy .env.example to .env and fill in values")
+            print(f"4. pip install -r requirements.txt")
+            print(f"5. py -m src.main <your_arguments>")
             print("-" * 50)
             return {
                 "success": True,
                 "needs_code_fix": False,
                 "fix_context": "",
-                "instructions": f"Project is ready. Navigate to {project_folder} and run: py -m src.main <args>"
+                "instructions": f"Project ready. Run: cd {project_folder} && py -m src.main <args>"
             }
 
-        # Analyze the error
         last_error = stderr + stdout
         print(f"\n⚠️  Error detected. Analyzing...")
         analysis = analyze_error_with_claude(last_error, project_folder)
 
-        print(f"   Action: {analysis['action']}")
-        print(f"   Fix: {analysis['fix_description']}")
+        print(f"   Action : {analysis['action']}")
+        print(f"   Fix    : {analysis['fix_description']}")
 
         if analysis["action"] == "install_package" and analysis["packages_to_install"]:
             installed = install_missing_package(analysis["packages_to_install"])
             if installed:
-                continue  # Retry after install
+                continue
 
         elif analysis["action"] == "fix_code":
             return {
@@ -302,7 +298,6 @@ def run_agent5(project_folder: str, generated_code: str = "") -> dict:
                 "instructions": analysis["fix_instructions"]
             }
 
-    # Max attempts reached
     print(f"\n⚠️  Could not auto-fix after {MAX_FIX_ATTEMPTS} attempts.")
     print("📋 Please review the error manually:")
     print(last_error)
@@ -320,30 +315,25 @@ if __name__ == "__main__":
     print("🔧 AGENT 5 — STANDALONE RUNTIME FIXER")
     print("=" * 50)
 
-    # Get project folder
-    folder = input("\nEnter project folder path (e.g. output/zip_code_fetch_hourly): ").strip()
-
+    folder = input("\nEnter project folder path (e.g. output/my_project): ").strip()
     if not folder:
         print("❌ No folder provided. Exiting.")
         exit(1)
 
-    # Get optional error message
     print("\nPaste the error message you got (or press Enter to auto-detect):")
     error_input = input("> ").strip()
 
-    # Get optional special instructions
-    print("\nAny special instructions? (e.g. 'use os.getenv instead of pydantic') or press Enter to skip:")
+    print("\nAny special instructions? (or press Enter to skip):")
     instructions = input("> ").strip()
 
-    # If user provided an error, analyze it directly
     if error_input:
         print(f"\n🔍 Analyzing provided error...")
         analysis = analyze_error_with_claude(
-            error_input + ("\n\nSpecial instructions: " + instructions if instructions else ""),
+            error_input + (f"\n\nSpecial instructions: {instructions}" if instructions else ""),
             folder
         )
-        print(f"\n   Action: {analysis['action']}")
-        print(f"   Fix: {analysis['fix_description']}")
+        print(f"\n   Action : {analysis['action']}")
+        print(f"   Fix    : {analysis['fix_description']}")
 
         if analysis["action"] == "install_package" and analysis["packages_to_install"]:
             install_missing_package(analysis["packages_to_install"])
@@ -351,18 +341,16 @@ if __name__ == "__main__":
 
         elif analysis["action"] == "fix_code":
             print(f"\n📋 Code fix needed: {analysis['fix_description']}")
-            print("⚠️  To auto-fix, re-run through the full pipeline with this error context.")
-            print(f"   Or manually fix: {analysis['fix_instructions']}")
+            print("⚠️  Re-run through the full pipeline with this error context.")
+            print(f"   Or manually fix: {analysis.get('fix_instructions', 'See error above')}")
 
         elif analysis["action"] == "ask_user":
             print(f"\n❓ {analysis['question_for_user']}")
 
         elif analysis["action"] == "show_instructions":
-            print(f"\n📋 Manual steps required:")
+            print(f"\n📋 Manual steps:")
             print(analysis["fix_instructions"])
-
     else:
-        # No error provided — auto-detect by running the project
         result = run_agent5(folder)
         if result["success"]:
             print("\n✅ Project is running fine — no issues found!")

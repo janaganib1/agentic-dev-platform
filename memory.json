@@ -1,0 +1,68 @@
+[
+  {
+    "requirement": "Given a zip code fetch hourly weather forecast using a free weather API from openweathermap.org and take zipcode and api key at runtime.",
+    "project_name": "zip_code_fetch_hourly",
+    "project_folder": "output\\zip_code_fetch_hourly",
+    "tech_stack": [
+      "requests",
+      "python-dotenv",
+      "click",
+      "rich",
+      "pydantic",
+      "pytest",
+      "pytest-mock"
+    ],
+    "files_generated": [],
+    "qa_status": "FAIL",
+    "created_at": "2026-04-04 11:43:30",
+    "last_updated": "2026-04-06 15:52:37"
+  },
+  {
+    "requirement": "Convert a Word document to PDF. Take a file path as input and convert it to PDF. No validation, no error handling, keep it simple. \u2014 Story 2: CLI Interface",
+    "project_name": "convert_word_document_pdf",
+    "project_folder": "output\\convert_word_document_pdf",
+    "tech_stack": [
+      "python-docx",
+      "reportlab",
+      "python-dotenv"
+    ],
+    "files_generated": [],
+    "qa_status": "PASS",
+    "created_at": "2026-04-06 16:04:52",
+    "last_updated": "2026-04-11 01:57:17"
+  },
+  {
+    "requirement": "develop simple word to pdf convertor",
+    "project_name": "develop_simple_word_pdf",
+    "project_folder": "output\\develop_simple_word_pdf",
+    "tech_stack": [],
+    "files_generated": [],
+    "qa_status": "FAIL",
+    "created_at": "2026-04-10 16:40:40",
+    "last_updated": "2026-04-10 16:40:40"
+  },
+  {
+    "requirement": "Fetch the current Bitcoin price from a free API and display it",
+    "project_name": "fetch_the_current_bitcoin",
+    "project_folder": "output\\fetch_the_current_bitcoin",
+    "tech_stack": [
+      "httpx",
+      "python-dotenv",
+      "click"
+    ],
+    "files_generated": [],
+    "qa_status": "FAIL",
+    "created_at": "2026-04-10 23:35:59",
+    "last_updated": "2026-04-10 23:35:59"
+  },
+  {
+    "requirement": "Convert a Word document to PDF. Take a file path as input and convert it to PDF. No validation, no error handling, keep it simple. \u2014 Story 2: Command line interface",
+    "project_name": "word_to_pdf_converter",
+    "project_folder": "output\\word_to_pdf_converter",
+    "tech_stack": [],
+    "files_generated": [],
+    "qa_status": "PASS",
+    "created_at": "2026-04-11 02:11:39",
+    "last_updated": "2026-04-11 02:16:55"
+  }
+]

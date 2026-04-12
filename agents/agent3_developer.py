@@ -1,3 +1,12 @@
+"""
+agent3_developer.py
+Developer Agent that:
+1. Implements ANY requirement as a complete multi-file Python project
+2. Follows strict code quality rules to ensure first-run success
+3. Never cuts off files mid-function
+4. Produces exactly what Agent 2 designed — no extras
+"""
+
 import os
 import re
 import anthropic
@@ -14,20 +23,17 @@ def parse_multi_file_response(response_text: str) -> dict:
     Expected format:
         ### FILE: path/to/file.py
         <code here>
-        ### FILE: path/to/another.py
-        <code here>
     Returns a dict: { "path/to/file.py": "<content>", ... }
     """
     files = {}
     parts = re.split(r'###\s*FILE:\s*', response_text)
-    for part in parts[1:]:  # Skip first empty split
+    for part in parts[1:]:
         lines = part.strip().splitlines()
         if not lines:
             continue
         file_path = lines[0].strip()
         file_content = "\n".join(lines[1:]).strip()
 
-        # Strip markdown code fences if present
         if file_content.startswith("```"):
             file_content = file_content.split("\n", 1)[1] if "\n" in file_content else ""
         if file_content.endswith("```"):
@@ -39,11 +45,7 @@ def parse_multi_file_response(response_text: str) -> dict:
 
 
 def save_project_files(project_name: str, files: dict) -> str:
-    """
-    Saves all generated files under output/<project_name>/.
-    Creates subdirectories as needed.
-    Returns the root project output path.
-    """
+    """Save all generated files under output/<project_name>/"""
     project_root = os.path.join("output", project_name)
     os.makedirs(project_root, exist_ok=True)
 
@@ -58,92 +60,134 @@ def save_project_files(project_name: str, files: dict) -> str:
 
 
 def generate_project_name(text: str) -> str:
-    """Generates a clean project folder name from the requirement."""
-    # Use first 80 chars only, keep words 3+ chars, max 4 words
+    """Generate clean project folder name from requirement text."""
+    skip = {
+        'given', 'using', 'with', 'from', 'that', 'this', 'will', 'have',
+        'build', 'create', 'make', 'develop', 'simple', 'basic', 'just',
+        'only', 'some', 'into', 'should', 'which', 'where', 'when', 'then'
+    }
     words = re.sub(r'[^a-zA-Z0-9\s]', '', text[:80])
-    # Skip common filler words
-    skip = {'given', 'using', 'with', 'from', 'that', 'this', 'will', 'have', 'build', 'create', 'make'}
     words = [w.lower() for w in words.split() if len(w) >= 3 and w.lower() not in skip][:4]
     return '_'.join(words) if words else 'generated_project'
 
 
 def run_agent3(technical_design: str, requirement: str = "") -> str:
     """
-    Run the developer agent to generate a multi-file Python project.
+    Run the developer agent to generate a complete multi-file Python project.
 
     Args:
-        technical_design: The technical design from Agent 2
-        requirement: The original user requirement (used for project folder naming)
+        technical_design: Technical design from Agent 2
+        requirement: Original user requirement (used for project folder naming)
     """
     print("\n🤖 Agent 3 (Developer) is writing the code...\n")
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=8096,
+        max_tokens=16000,
         messages=[
             {
                 "role": "user",
                 "content": f"""You are a senior Python developer.
+You implement ANY kind of Python project — CLI tools, APIs, file processors,
+web scrapers, data pipelines, utilities, automation scripts, and more.
 
 You have received this technical design:
 {technical_design}
 
-Your job is to implement the solution as a COMPLETE MULTI-FILE Python project.
+════════════════════════════════════════
+IMPLEMENTATION RULES — ALWAYS FOLLOW
+════════════════════════════════════════
 
-Rules:
-1. Split code into logical modules (e.g. main.py, utils.py, config.py, models.py)
-2. Include a tests/ folder with at least one test file
-3. Include a requirements.txt listing all dependencies
-4. Include a README.md with:
-   - Project description
-   - ALL required environment variables with exact names and how to set them (e.g. in .env file)
-   - ALL runtime parameters with example run commands
-   - Example .env file content
-   - Setup steps
-5. Include __init__.py in every package folder
-6. Use proper error handling throughout
-7. Add comments explaining key logic
-8. Every file must be complete and ready to run
+TECHNOLOGY RULES:
+❌ NEVER use: win32com, pywin32, AppKit, or ANY OS-automation library
+❌ NEVER use: docx2pdf (requires MS Word installed — use python-docx + reportlab instead)
+❌ NEVER use: pydantic BaseSettings or pydantic-settings (use os.getenv() instead)
+❌ NEVER use: click, typer, fire (use argparse)
+❌ NEVER use: httpx, aiohttp (use requests)
+❌ NEVER use: async/await unless design explicitly requires it
+✅ ALWAYS use: os.getenv() + python-dotenv for ALL configuration
+✅ ALWAYS use: argparse for CLI interfaces
+✅ ALWAYS use: requests for HTTP calls
+✅ ALWAYS use: the exact libraries specified in the technical design
 
-Output format — use EXACTLY this format for each file, no exceptions:
+IMPORT RULES:
+✅ Follow the import hierarchy from the technical design EXACTLY
+✅ src/__init__.py must be EMPTY — no imports
+✅ tests/__init__.py must be EMPTY — no imports
+✅ config.py must have NO project imports — only standard library + dotenv
+✅ Use relative imports (from .config import ...) inside src/ package
+❌ NEVER create circular imports — if A imports B, B must not import A
+
+CODE COMPLETENESS RULES:
+✅ Every function must be COMPLETE — no pass, no TODO, no ... placeholders
+✅ Every file must be COMPLETE — never cut off mid-function or mid-class
+✅ If running low on space — simplify the code, NEVER truncate it
+✅ main.py MUST have if __name__ == "__main__": block
+✅ requirements.txt must list EVERY non-standard library that is imported
+✅ .env.example must list EVERY environment variable used in code
+
+TEST RULES:
+✅ test_main.py must be COMPLETE and RUNNABLE
+✅ Tests must be simple — happy path only
+✅ Maximum 30 lines per test file
+✅ Use pytest style (def test_xxx():)
+✅ Mock external calls (API, file system) where needed
+❌ NEVER write incomplete test functions
+❌ NEVER write tests that require real API keys or real files to pass
+
+SCOPE RULES:
+✅ Implement EXACTLY what the design says — nothing more
+❌ NEVER add caching, retry logic, rate limiting, or auth unless in design
+❌ NEVER add extra validation beyond what is needed to run
+❌ NEVER add logging configuration unless design specifies it
+❌ NEVER add security hardening unless design specifies it
+
+════════════════════════════════════════
+PRE-OUTPUT CHECKLIST — VERIFY BEFORE RESPONDING
+════════════════════════════════════════
+
+Before writing your response, verify:
+1. ✅ All imports at top of each file will resolve
+2. ✅ requirements.txt lists every non-standard import
+3. ✅ No file cuts off mid-function
+4. ✅ src/__init__.py is empty
+5. ✅ main.py has if __name__ == "__main__": block
+6. ✅ Import hierarchy has no circular dependencies
+7. ✅ No pydantic, no win32com, no click, no httpx anywhere
+8. ✅ test file is complete and under 30 lines
+
+════════════════════════════════════════
+OUTPUT FORMAT — USE EXACTLY THIS FORMAT
+════════════════════════════════════════
+
+Use EXACTLY this format for each file — no exceptions:
 
 ### FILE: src/__init__.py
-<file content here>
-
+### FILE: src/config.py
 ### FILE: src/main.py
-<file content here>
-
-### FILE: src/utils.py
-<file content here>
-
 ### FILE: tests/__init__.py
-<file content here>
-
 ### FILE: tests/test_main.py
-<file content here>
-
 ### FILE: requirements.txt
-<file content here>
-
 ### FILE: README.md
-<file content here>
+### FILE: .env.example
 
-Return ONLY the files in the format above. No explanations outside the files."""
+Rules for each file:
+- Start each with ### FILE: path/to/file
+- Write complete file content immediately after
+- No explanations between files
+- Return ONLY the files — no text before or after"""
             }
         ]
     )
 
     result = response.content[0].text
-
-    # Parse all files from the response
     files = parse_multi_file_response(result)
 
-    # Use requirement for project name if provided, fallback to technical design
+    # Use requirement for project name if provided
     naming_source = requirement if requirement.strip() else technical_design
     project_name = generate_project_name(naming_source)
 
     if not files:
-        # Fallback: save as single file if parsing fails
         print("⚠️  Could not parse multi-file response. Saving as single file.")
         output_path = f"output/{project_name}.py"
         with open(output_path, "w", encoding="utf-8") as f:
@@ -151,7 +195,6 @@ Return ONLY the files in the format above. No explanations outside the files."""
         print(f"✅ Saved to: {output_path}")
         return result
 
-    # Save all files under a project folder
     project_root = save_project_files(project_name, files)
 
     print("\n✅ Agent 3 Output:")
@@ -160,7 +203,6 @@ Return ONLY the files in the format above. No explanations outside the files."""
     print(f"📦 Files generated: {len(files)}")
     print("-" * 50)
 
-    # Return all file contents combined (for QA agent to review)
     combined = "\n\n".join(
         f"# === {path} ===\n{content}" for path, content in files.items()
     )
@@ -169,24 +211,24 @@ Return ONLY the files in the format above. No explanations outside the files."""
 
 if __name__ == "__main__":
     sample_design = """
-    Technology Stack: requests, python-dotenv
+    ## Goal
+    Read a .docx file and convert text to PDF.
 
-    Project Structure:
-    - src/main.py (entry point)
-    - src/weather.py (API logic)
-    - src/utils.py (helpers)
-    - tests/test_weather.py (unit tests)
-    - requirements.txt
-    - README.md
+    ## Technology Stack
+    - python-docx: read Word files
+    - reportlab: generate PDF
 
-    Environment Variables:
-    - OPENWEATHER_API_KEY: your OpenWeatherMap API key
+    ## Import Hierarchy
+    config.py → no project imports
+    converter.py → imports config.py
+    main.py → imports converter.py, config.py
 
-    Runtime Parameters:
-    - zip_code: passed as command line argument
+    ## Files
+    src/__init__.py, src/main.py, src/config.py, src/converter.py
+    tests/__init__.py, tests/test_main.py
+    requirements.txt, README.md, .env.example
 
-    Key Functions:
-    - get_forecast(zip_code)
-    - format_output(data)
+    ## Run Command
+    py -m src.main input.docx
     """
-    run_agent3(sample_design, requirement="fetch hourly weather forecast by zip code")
+    run_agent3(sample_design, requirement="convert word document to pdf")
