@@ -34,6 +34,7 @@ class AgentState(TypedDict):
     human_approved: bool
     project_folder: str
     runtime_fix_context: str
+    auto_approve: bool
 
 
 # ─── Agent Nodes ─────────────────────────────────────────────────────────────
@@ -373,9 +374,9 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
         requirement=requirement,
         split_result=split_result,
         story_results=story_results,
-        project_folder=project_folder
+        project_folder=actual_project_folder
     )
-    summary_path = save_summary(summary_md, project_folder)
+    summary_path = save_summary(summary_md, actual_project_folder)
 
     completed = [r for r in story_results if r["approved"]]
 
