@@ -112,7 +112,7 @@ NEVER use pydantic BaseSettings — use python-dotenv with os.getenv() instead.
 
     code = run_agent3(input_to_dev, requirement=state["requirement"])
 
-    if memory_context.get("mode") in ["enhance", "resume"] and memory_context.get("existing_project_folder"):
+    if memory_context.get("mode") in ["enhance", "resume"] and memory_context.get("existing_project_folder") and memory_context.get("same_ticket"):
         project_folder = memory_context["existing_project_folder"]
     else:
         project_folder = state.get("project_folder") or os.path.join("output", generate_project_name(state["requirement"]))
@@ -357,7 +357,8 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
                 "existing_project_folder": actual_project_folder,
                 "existing_files": {},
                 "tech_stack": tech_stack,
-                "context_summary": f"Story {story['story_number']} complete: {story['title']}"
+                "context_summary": f"Story {story['story_number']} complete: {story['title']}",
+                "same_ticket": True
             }
             add_memory_entry(
                 requirement=f"{requirement} — Story {story['story_number']}: {story['title']}",
