@@ -391,7 +391,7 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
     if auto_approve and completed and ticket_id:
         print(f"\n{'=' * 50}")
         print("🐙 Pushing to GitHub...")
-       github_result = run_github_agent(
+       github_result = run_github_agent( 
             ticket_id=ticket_id,
             local_folder=actual_project_folder
         )
