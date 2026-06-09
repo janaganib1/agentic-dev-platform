@@ -378,6 +378,7 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
     )
     summary_path = save_summary(summary_md, actual_project_folder)
 
+
     completed = [r for r in story_results if r["approved"]]
 
     # Step 4: Push to GitHub (only in webhook/auto_approve mode)
