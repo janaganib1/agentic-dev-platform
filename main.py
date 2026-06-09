@@ -13,6 +13,7 @@ from agents.agent3_developer import run_agent3, generate_project_name
 from agents.agent4_qa import run_agent4
 from agents.agent5_runtime_fixer import run_agent5
 from agents.agent_github import run_github_agent
+from git_manager import prepare_branch, commit_and_push
 from memory_manager import add_memory_entry, extract_tech_stack_from_requirements
 
 load_dotenv()
@@ -296,6 +297,10 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
     print(f"🚀 AGENTIC DEV PLATFORM")
     print(f"{'=' * 50}")
 
+    # Step 0: Prepare git branch
+    if ticket_id:
+        prepare_branch(ticket_id)
+
     # Step 1: Split into stories
     split_result = run_agent05(requirement)
     stories = split_result["stories"]
@@ -386,11 +391,12 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
     if auto_approve and completed and ticket_id:
         print(f"\n{'=' * 50}")
         print("🐙 Pushing to GitHub...")
-        github_result = run_github_agent(
+       github_result = run_github_agent(
             ticket_id=ticket_id,
             local_folder=actual_project_folder
         )
-
+        commit_and_push(ticket_id)
+ 
     print(f"\n{'=' * 50}")
     print("🏁 PIPELINE COMPLETE")
     print(f"{'=' * 50}")
