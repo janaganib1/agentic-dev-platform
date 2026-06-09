@@ -1,38 +1,41 @@
-import pytest
+import subprocess
+import sys
 from unittest.mock import patch, MagicMock
-from src.main import parse_arguments, main
-from src.weather import format_weather_dashboard
 
-def test_parse_arguments():
-    with patch('sys.argv', ['main.py', 'Dallas']):
-        args = parse_arguments()
-        assert args.city == 'Dallas'
+PYTHON = sys.executable
 
-def test_format_weather_dashboard():
-    weather_data = {
-        'name': 'Dallas',
-        'sys': {'country': 'US'},
-        'main': {'temp': 25.0, 'humidity': 60},
-        'weather': [{'description': 'clear sky'}],
-        'wind': {'speed': 5.5}
+
+def test_valid_city():
+    mock_data = {
+        "name": "Dallas", "sys": {"country": "US"},
+        "main": {"temp": 75, "feels_like": 73, "humidity": 50},
+        "weather": [{"description": "clear sky"}], "wind": {"speed": 5}
     }
-    
-    dashboard = format_weather_dashboard(weather_data)
-    assert 'Dallas, US' in dashboard
-    assert '25.0°C' in dashboard
-    assert '77.0°F' in dashboard
-    assert 'Clear Sky' in dashboard
-    assert '60%' in dashboard
-    assert '5.5 m/s' in dashboard
+    with patch("src.story1.requests.get") as mock_get:
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: mock_data)
+        result = subprocess.run(
+            [PYTHON, "-m", "src.main", "Dallas"],
+            capture_output=True, text=True
+        )
+    assert result.returncode == 0
+    assert "Dallas" in result.stdout
 
-@patch('src.main.fetch_weather_data')
-@patch('sys.argv', ['main.py', 'TestCity'])
-def test_main_success(mock_fetch):
-    mock_fetch.return_value = {
-        'name': 'TestCity',
-        'sys': {'country': 'TC'},
-        'main': {'temp': 20.0, 'humidity': 50},
-        'weather': [{'description': 'sunny'}],
-        'wind': {'speed': 3.0}
-    }
-    main()
+
+def test_no_argument():
+    result = subprocess.run(
+        [PYTHON, "-m", "src.main"],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0
+    assert "Usage" in result.stdout
+
+
+def test_invalid_city():
+    with patch("src.story1.requests.get") as mock_get:
+        mock_get.return_value = MagicMock(status_code=404)
+        result = subprocess.run(
+            [PYTHON, "-m", "src.main", "FakeCity123"],
+            capture_output=True, text=True
+        )
+    assert result.returncode == 1
+    assert "FakeCity123" in result.stdout

@@ -1,21 +1,13 @@
 [
   {
-    "requirement": "Given a zip code fetch hourly weather forecast using a free weather API from openweathermap.org and take zipcode and api key at runtime.",
+    "requirement": "Develop a weather dashboard for a city name\n\nCreate a CLI application that accepts a city name as input and displays the current weather conditions including temperature, humidity, wind speed, and a brief weather description. Use the OpenWeatherMap API with this API key: fc0c90dcc50590c3bc1289278e78610a Example usage: py -m src.main \"Dallas\" \u2014 Story 3: CLI Interface Implementation",
     "project_name": "zip_code_fetch_hourly",
     "project_folder": "output\\zip_code_fetch_hourly",
-    "tech_stack": [
-      "requests",
-      "python-dotenv",
-      "click",
-      "rich",
-      "pydantic",
-      "pytest",
-      "pytest-mock"
-    ],
+    "tech_stack": [],
     "files_generated": [],
-    "qa_status": "FAIL",
+    "qa_status": "PASS",
     "created_at": "2026-04-04 11:43:30",
-    "last_updated": "2026-04-06 15:52:37"
+    "last_updated": "2026-06-04 14:29:28"
   },
   {
     "requirement": "Convert a Word document to PDF. Take a file path as input and convert it to PDF. No validation, no error handling, keep it simple. \u2014 Story 2: CLI Interface",
@@ -64,5 +56,59 @@
     "qa_status": "PASS",
     "created_at": "2026-04-11 02:11:39",
     "last_updated": "2026-04-11 02:16:55"
+  },
+  {
+    "requirement": "show current  stock price based on the ticker symbol \u2014 Story 2: CLI Stock Price Display",
+    "project_name": "stock_price_fetcher",
+    "project_folder": "output\\stock_price_fetcher",
+    "tech_stack": [],
+    "files_generated": [],
+    "qa_status": "PASS",
+    "created_at": "2026-04-12 21:45:06",
+    "last_updated": "2026-04-12 21:45:53"
+  },
+  {
+    "requirement": "develop a simple application to get the bitcoin price \u2014 Story 2: CLI Bitcoin Price Display",
+    "project_name": "bitcoin_price_fetcher",
+    "project_folder": "output\\bitcoin_price_fetcher",
+    "tech_stack": [],
+    "files_generated": [],
+    "qa_status": "PASS",
+    "created_at": "2026-06-02 10:21:14",
+    "last_updated": "2026-06-02 12:44:28"
+  },
+  {
+    "requirement": "Develop a simple Bitcoin price tracker\n\nCreate a CLI application that fetches the current Bitcoin price in USD using the CoinGecko public API (no API key needed) and displays it to the user. \u2014 Story 3: CLI interface",
+    "project_name": "bitcoin_price_tracker",
+    "project_folder": "output\\bitcoin_price_tracker",
+    "tech_stack": [],
+    "files_generated": [],
+    "qa_status": "PASS",
+    "created_at": "2026-06-02 15:13:44",
+    "last_updated": "2026-06-04 11:35:44"
+  },
+  {
+    "requirement": "weather forecast application enhance to show more user friendly fields on the output if possible web url access \u2014 Story 2: Data Formatter Module",
+    "project_name": "weather_forecast_fetcher",
+    "project_folder": "output\\weather_forecast_fetcher",
+    "tech_stack": [],
+    "files_generated": [],
+    "qa_status": "PASS",
+    "created_at": "2026-06-02 15:27:29",
+    "last_updated": "2026-06-02 16:17:19"
+  },
+  {
+    "requirement": "Develop a weather dashboard for a city name\n\nCreate a CLI application that accepts a city name\nas input and displays the current weather conditions\nincluding temperature, humidity, wind speed, and a\nbrief weather description.\n\nUse the OpenWeatherMap API key from {{.ENV file WEATHER_API_KEY}}\n\n\nExample usage: py -m src.main \"Dallas\" \u2014 Story 3: Build CLI Entry Point",
+    "project_name": "weather_dashboard_cli",
+    "project_folder": "output\\weather_dashboard_cli",
+    "tech_stack": [
+      "requests",
+      "python-dotenv",
+      "pytest"
+    ],
+    "files_generated": [],
+    "qa_status": "PASS",
+    "created_at": "2026-06-04 15:21:04",
+    "last_updated": "2026-06-08 19:51:40"
   }
 ]

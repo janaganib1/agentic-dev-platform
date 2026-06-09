@@ -119,7 +119,7 @@ def analyze_error_with_claude(error_text: str, project_folder: str) -> dict:
                 file_summary += f"- src/{f}\n"
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1000,
         messages=[
             {

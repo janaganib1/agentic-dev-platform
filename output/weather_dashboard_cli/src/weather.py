@@ -1,44 +1,30 @@
+import os
 import requests
-import json
-from .config import get_api_key, get_api_url
+from dotenv import load_dotenv
 
-def fetch_weather_data(city: str):
-    """Calls weather API and returns raw JSON data."""
-    api_key = get_api_key()
-    api_url = get_api_url()
-    
-    params = {
-        'q': city,
-        'appid': api_key,
-        'units': 'metric'
+load_dotenv()
+API_KEY = os.getenv("WEATHER_API_KEY")
+
+BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
+
+
+def get_weather(city: str) -> dict:
+    response = requests.get(
+        BASE_URL,
+        params={"q": city, "appid": API_KEY, "units": "imperial"},
+    )
+
+    if response.status_code == 404:
+        raise ValueError(f"City '{city}' not found")
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    return {
+        "city": city,
+        "temperature": data["main"]["temp"],
+        "humidity": data["main"]["humidity"],
+        "wind_speed": data["wind"]["speed"],
+        "description": data["weather"][0]["description"],
     }
-    
-    try:
-        response = requests.get(api_url, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Failed to fetch weather data: {str(e)}")
-
-def format_weather_dashboard(weather_data: dict):
-    """Formats weather data into readable dashboard string."""
-    city = weather_data['name']
-    country = weather_data['sys']['country']
-    temp_c = weather_data['main']['temp']
-    temp_f = (temp_c * 9/5) + 32
-    description = weather_data['weather'][0]['description'].title()
-    humidity = weather_data['main']['humidity']
-    wind_speed = weather_data['wind']['speed']
-    
-    dashboard = f"""
-═══════════════════════════════════
-          WEATHER DASHBOARD
-═══════════════════════════════════
-City:         {city}, {country}
-Temperature:  {temp_c:.1f}°C ({temp_f:.1f}°F)
-Description:  {description}
-Humidity:     {humidity}%
-Wind Speed:   {wind_speed} m/s
-═══════════════════════════════════
-"""
-    return dashboard.strip()

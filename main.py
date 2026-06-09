@@ -1,5 +1,5 @@
 import os
-import json
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
@@ -12,6 +12,7 @@ from agents.agent2_architect import run_agent2
 from agents.agent3_developer import run_agent3, generate_project_name
 from agents.agent4_qa import run_agent4
 from agents.agent5_runtime_fixer import run_agent5
+from agents.agent_github import run_github_agent
 from memory_manager import add_memory_entry, extract_tech_stack_from_requirements
 
 load_dotenv()
@@ -20,8 +21,8 @@ load_dotenv()
 # ─── State Definition ────────────────────────────────────────────────────────
 
 class AgentState(TypedDict):
-    requirement: str           # Original full requirement
-    current_story: dict        # Current story being executed
+    requirement: str
+    current_story: dict
     memory_context: dict
     project_brief: str
     technical_design: str
@@ -38,7 +39,6 @@ class AgentState(TypedDict):
 # ─── Agent Nodes ─────────────────────────────────────────────────────────────
 
 def memory_node(state: AgentState) -> AgentState:
-    # If memory context already set (story 2+), skip Agent 0
     existing = state.get("memory_context", {})
     if existing.get("mode"):
         print("\n🧠 Agent 0 (Memory) — skipping, using context from previous story.\n")
@@ -49,15 +49,11 @@ def memory_node(state: AgentState) -> AgentState:
 
 def orchestrator_node(state: AgentState) -> AgentState:
     story = state.get("current_story", {})
-    # Use story requirement if available, else full requirement
     story_req = story.get("requirement", state["requirement"])
     acceptance = story.get("acceptance_criteria", [])
-
-    # Append acceptance criteria to brief for Agent 1
     full_req = story_req
     if acceptance:
         full_req += f"\n\nAcceptance Criteria:\n" + "\n".join(f"- {c}" for c in acceptance)
-
     brief = run_agent1(full_req, memory_context=state.get("memory_context"))
     return {**state, "project_brief": brief}
 
@@ -65,13 +61,11 @@ def orchestrator_node(state: AgentState) -> AgentState:
 def architect_node(state: AgentState) -> AgentState:
     memory_context = state.get("memory_context", {})
     existing_files = memory_context.get("existing_files", {})
-
     existing_code_section = ""
     if existing_files and memory_context.get("mode") in ["enhance", "resume"]:
         existing_code_section = "\n\nEXISTING CODE TO BUILD ON:\n"
         for path, content in existing_files.items():
             existing_code_section += f"\n### {path}\n{content}\n"
-
     design = run_agent2(state["project_brief"] + existing_code_section)
     return {**state, "technical_design": design}
 
@@ -79,7 +73,6 @@ def architect_node(state: AgentState) -> AgentState:
 def developer_node(state: AgentState) -> AgentState:
     memory_context = state.get("memory_context", {})
     runtime_fix_context = state.get("runtime_fix_context", "")
-
     if runtime_fix_context:
         input_to_dev = f"""
 The generated project had runtime errors that need to be fixed.
@@ -120,7 +113,6 @@ NEVER use pydantic BaseSettings — use python-dotenv with os.getenv() instead.
     if memory_context.get("mode") in ["enhance", "resume"] and memory_context.get("existing_project_folder"):
         project_folder = memory_context["existing_project_folder"]
     else:
-        # Use project_folder from state (set by story splitter) for consistency
         project_folder = state.get("project_folder") or os.path.join("output", generate_project_name(state["requirement"]))
 
     return {
@@ -134,37 +126,30 @@ NEVER use pydantic BaseSettings — use python-dotenv with os.getenv() instead.
 
 def qa_node(state: AgentState) -> AgentState:
     result = run_agent4(state["generated_code"])
-    return {
-        **state,
-        "qa_status": result["status"],
-        "qa_review": result["review"]
-    }
+    return {**state, "qa_status": result["status"], "qa_review": result["review"]}
 
 
 def human_approval_node(state: AgentState) -> AgentState:
+    # Skip interactive approval when running via webhook (auto_approve flag)
+    if state.get("auto_approve"):
+        print("\n🤖 Auto-approved via webhook trigger.")
+        return {**state, "human_approved": True}
+
     story = state.get("current_story", {})
     story_title = story.get("title", "Implementation")
-
     print("\n" + "=" * 50)
     print("👤 HUMAN APPROVAL REQUIRED")
     print("=" * 50)
     print(f"\nStory: {story_title}")
-
     if state["qa_status"] == "PASS":
         print("QA has PASSED. Please review the generated code.")
     else:
         print("⚠️ Max retries reached. QA did not fully pass. Please review carefully.")
-
     print(f"📁 Project folder: {state.get('project_folder', 'output/')}")
     print("\nDo you approve this implementation?")
     approval = input("Type 'yes' to approve or 'no' to reject: ")
     approved = approval.lower() == "yes"
-
-    if approved:
-        print("\n✅ Approved!")
-    else:
-        print("\n❌ Rejected.")
-
+    print("\n✅ Approved!" if approved else "\n❌ Rejected.")
     return {**state, "human_approved": approved}
 
 
@@ -214,7 +199,6 @@ def route_after_runtime_fix(state: AgentState) -> str:
 
 def build_pipeline():
     graph = StateGraph(AgentState)
-
     graph.add_node("memory", memory_node)
     graph.add_node("orchestrator", orchestrator_node)
     graph.add_node("architect", architect_node)
@@ -222,7 +206,6 @@ def build_pipeline():
     graph.add_node("qa", qa_node)
     graph.add_node("human_approval", human_approval_node)
     graph.add_node("runtime_fixer", runtime_fixer_node)
-
     graph.set_entry_point("memory")
     graph.add_edge("memory", "orchestrator")
     graph.add_edge("orchestrator", "architect")
@@ -240,97 +223,59 @@ def build_pipeline():
         "developer": "developer",
         "done": END
     })
-
     return graph.compile()
 
 
 # ─── Summary Generator ────────────────────────────────────────────────────────
 
-def generate_project_summary(
-    requirement: str,
-    split_result: dict,
-    story_results: list,
-    project_folder: str
-) -> str:
-    """Generate a markdown summary of all completed stories."""
+def generate_project_summary(requirement, split_result, story_results, project_folder):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     complexity = split_result.get("complexity", "UNKNOWN")
     project_name = split_result.get("project_name", "project")
     project_summary = split_result.get("project_summary", requirement)
-
     completed = [r for r in story_results if r["approved"]]
     failed = [r for r in story_results if not r["approved"]]
-
     lines = [
-        f"# Project Summary: {project_name}",
-        f"",
+        f"# Project Summary: {project_name}", "",
         f"**Generated:** {now}",
         f"**Complexity:** {complexity}",
         f"**Original Requirement:** {requirement}",
         f"**Project Summary:** {project_summary}",
-        f"**Project Folder:** `{project_folder}`",
-        f"",
-        f"---",
-        f"",
-        f"## Stories Completed: {len(completed)}/{len(story_results)}",
-        f"",
+        f"**Project Folder:** `{project_folder}`", "", "---", "",
+        f"## Stories Completed: {len(completed)}/{len(story_results)}", "",
     ]
-
     for result in story_results:
         story = result["story"]
         status = "✅ DONE" if result["approved"] else "❌ REJECTED"
         qa = result.get("qa_status", "UNKNOWN")
         lines += [
-            f"### Story {story['story_number']}: {story['title']} — {status}",
-            f"",
-            f"**Requirement:** {story['requirement']}",
-            f"",
-            f"**Acceptance Criteria:**",
+            f"### Story {story['story_number']}: {story['title']} — {status}", "",
+            f"**Requirement:** {story['requirement']}", "", "**Acceptance Criteria:**",
         ]
         for c in story.get("acceptance_criteria", []):
             lines.append(f"- {c}")
-        lines += [
-            f"",
-            f"**QA Status:** {qa}",
-            f"**Tech Stack:** {result.get('tech_stack', 'See requirements.txt')}",
-            f"",
-            f"---",
-            f"",
-        ]
-
+        lines += ["", f"**QA Status:** {qa}", f"**Tech Stack:** {result.get('tech_stack', 'See requirements.txt')}", "", "---", ""]
     if failed:
-        lines += [
-            f"## ⚠️ Stories Not Completed",
-            f"",
-        ]
+        lines += ["## ⚠️ Stories Not Completed", ""]
         for result in failed:
             story = result["story"]
             lines.append(f"- Story {story['story_number']}: {story['title']} — REJECTED by user")
         lines.append("")
-
     lines += [
-        f"## How to Run",
-        f"",
-        f"```bash",
+        "## How to Run", "", "```bash",
         f"cd {project_folder}",
-        f"pip install -r requirements.txt",
-        f"py -m src.main <your_arguments>",
-        f"```",
-        f"",
-        f"## Notes for Jira",
-        f"",
+        "pip install -r requirements.txt",
+        "py -m src.main <your_arguments>",
+        "```", "", "## Notes for Jira", "",
         f"- Total stories implemented: {len(completed)}",
         f"- All stories are in folder: `{project_folder}`",
-        f"- Each story's code is in `src/` subfolder",
-        f"- Tests are in `tests/` subfolder",
-        f"",
+        "- Each story's code is in `src/` subfolder",
+        "- Tests are in `tests/` subfolder", "",
     ]
-
     return "\n".join(lines)
 
 
-def save_summary(summary_md: str, project_folder: str) -> str:
-    """Save summary markdown to project folder."""
+def save_summary(summary_md, project_folder):
     os.makedirs(project_folder, exist_ok=True)
     summary_path = os.path.join(project_folder, "SUMMARY.md")
     with open(summary_path, "w", encoding="utf-8") as f:
@@ -338,14 +283,17 @@ def save_summary(summary_md: str, project_folder: str) -> str:
     return summary_path
 
 
-# ─── Main Entry Point ─────────────────────────────────────────────────────────
+# ─── Shared Pipeline Runner (used by CLI and webhook) ─────────────────────────
 
-if __name__ == "__main__":
-    print("\n" + "=" * 50)
-    print("🚀 AGENTIC DEV PLATFORM")
-    print("=" * 50)
-
-    requirement = input("\nEnter your requirement: ")
+def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: bool = False) -> dict:
+    """
+    Core pipeline runner — shared between CLI and webhook trigger.
+    - auto_approve=False: interactive CLI mode (prompts for approval)
+    - auto_approve=True:  webhook mode (auto-approves, pushes to GitHub)
+    """
+    print(f"\n{'=' * 50}")
+    print(f"🚀 AGENTIC DEV PLATFORM")
+    print(f"{'=' * 50}")
 
     # Step 1: Split into stories
     split_result = run_agent05(requirement)
@@ -356,7 +304,7 @@ if __name__ == "__main__":
     pipeline = build_pipeline()
     story_results = []
     memory_context = {}
-    actual_project_folder = project_folder  # tracks the real output folder
+    actual_project_folder = project_folder
 
     # Step 2: Execute each story
     for i, story in enumerate(stories):
@@ -364,15 +312,12 @@ if __name__ == "__main__":
         print(f"▶️  EXECUTING STORY {story['story_number']}/{len(stories)}: {story['title']}")
         print(f"{'=' * 50}")
 
-        # Only run memory agent for the first story
-        # Subsequent stories use the memory context from the previous story
         if i > 0 and memory_context:
             print(f"🔗 Continuing with existing project context from Story {i}...\n")
 
         initial_state: AgentState = {
             "requirement": requirement,
             "current_story": story,
-            # Story 1 gets fresh memory check, stories 2+ reuse previous context
             "memory_context": memory_context if i > 0 else {},
             "project_brief": "",
             "technical_design": "",
@@ -382,13 +327,13 @@ if __name__ == "__main__":
             "retry_count": 0,
             "runtime_retry_count": 0,
             "human_approved": False,
+            "auto_approve": auto_approve,
             "project_folder": project_folder,
             "runtime_fix_context": ""
         }
 
         final_state = pipeline.invoke(initial_state)
 
-        # Track result
         tech_stack = extract_tech_stack_from_requirements(
             final_state.get("project_folder", project_folder)
         )
@@ -399,7 +344,6 @@ if __name__ == "__main__":
             "tech_stack": ", ".join(tech_stack) if tech_stack else "See requirements.txt"
         })
 
-        # Update memory context for next story
         if final_state["human_approved"]:
             actual_project_folder = final_state.get("project_folder", project_folder)
             memory_context = {
@@ -409,8 +353,6 @@ if __name__ == "__main__":
                 "tech_stack": tech_stack,
                 "context_summary": f"Story {story['story_number']} complete: {story['title']}"
             }
-
-            # Save to memory after each approved story
             add_memory_entry(
                 requirement=f"{requirement} — Story {story['story_number']}: {story['title']}",
                 project_name=project_name,
@@ -435,11 +377,36 @@ if __name__ == "__main__":
     )
     summary_path = save_summary(summary_md, project_folder)
 
-    # Step 4: Final output
     completed = [r for r in story_results if r["approved"]]
+
+    # Step 4: Push to GitHub (only in webhook/auto_approve mode)
+    github_result = {}
+    if auto_approve and completed and ticket_id:
+        print(f"\n{'=' * 50}")
+        print("🐙 Pushing to GitHub...")
+        github_result = run_github_agent(
+            ticket_id=ticket_id,
+            local_folder=actual_project_folder
+        )
+
     print(f"\n{'=' * 50}")
     print("🏁 PIPELINE COMPLETE")
     print(f"{'=' * 50}")
     print(f"✅ Stories completed: {len(completed)}/{len(stories)}")
     print(f"📁 Project folder: {project_folder}")
     print(f"📋 Summary saved: {summary_path}")
+
+    return {
+        "stories_completed": len(completed),
+        "stories_total": len(stories),
+        "project_folder": actual_project_folder,
+        "summary_path": summary_path,
+        "github": github_result
+    }
+
+
+# ─── CLI Entry Point ──────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    requirement = input("\nEnter your requirement: ")
+    run_full_pipeline(requirement=requirement, auto_approve=False)

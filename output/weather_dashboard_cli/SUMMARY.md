@@ -1,47 +1,60 @@
 # Project Summary: weather_dashboard_cli
 
-**Generated:** 2026-06-04 17:01:41
+**Generated:** 2026-06-08 19:51:40
 **Complexity:** MEDIUM
 **Original Requirement:** Develop a weather dashboard for a city name
 
-Create a CLI application that accepts a city name as input and displays the current weather conditions including temperature, humidity, wind speed, and a brief weather description. Use the OpenWeatherMap API key from  .ENV file WEATHER_API_KEY Example usage: py -m src.main "Dallas"
-**Project Summary:** A CLI application that fetches and displays current weather conditions for a specified city using the OpenWeatherMap API.
+Create a CLI application that accepts a city name
+as input and displays the current weather conditions
+including temperature, humidity, wind speed, and a
+brief weather description.
+
+Use the OpenWeatherMap API key from {{.ENV file WEATHER_API_KEY}}
+
+
+Example usage: py -m src.main "Dallas"
+**Project Summary:** A CLI application that accepts a city name and displays current weather conditions using the OpenWeatherMap API.
 **Project Folder:** `output\weather_dashboard_cli`
 
 ---
 
 ## Stories Completed: 3/3
 
-### Story 1: Weather API Client — ✅ DONE
+### Story 1: Fetch Weather Data — ✅ DONE
 
-**Requirement:** Create a weather service module that fetches current weather data from OpenWeatherMap API using city name and API key from environment variables.
+**Requirement:** Create a core module in src/weather.py that reads WEATHER_API_KEY from a .env file and fetches current weather data for a given city name from the OpenWeatherMap API, returning temperature, humidity, wind speed, and weather description as a dictionary.
 
 **Acceptance Criteria:**
-- Core function returns weather data dict with temperature, humidity, wind speed, and description for valid city input
+- Calling get_weather('Dallas') returns a dictionary with keys: city, temperature, humidity, wind_speed, and description
+- The function reads WEATHER_API_KEY from the .env file using python-dotenv
+- The function raises a clear exception when the city is not found
 
 **QA Status:** PASS
 **Tech Stack:** requests, python-dotenv, pytest
 
 ---
 
-### Story 2: Weather Data Formatter — ✅ DONE
+### Story 2: Format Weather Output — ✅ DONE
 
-**Requirement:** Create a formatter module that takes raw weather API response and formats it into a readable dashboard display format.
+**Requirement:** Create a display module in src/display.py that accepts the weather dictionary and prints a formatted weather dashboard to the console showing all weather fields with labels and units.
 
 **Acceptance Criteria:**
-- Formatter function returns formatted string containing temperature, humidity, wind speed, and weather description
+- Calling display_weather(weather_dict) prints city name, temperature in Celsius, humidity as percentage, wind speed in m/s, and weather description
+- Output is human-readable with clear labels for each field
 
 **QA Status:** PASS
-**Tech Stack:** python-dotenv, requests, pytest
+**Tech Stack:** requests, python-dotenv, pytest
 
 ---
 
-### Story 3: CLI Interface Implementation — ✅ DONE
+### Story 3: Build CLI Entry Point — ✅ DONE
 
-**Requirement:** Create main module that accepts city name as command line argument, calls weather service, formats output, and displays the weather dashboard.
+**Requirement:** Create src/main.py as the CLI entry point that accepts a city name as a command-line argument, calls the weather fetch function, and passes the result to the display function.
 
 **Acceptance Criteria:**
-- Running py -m src.main "Dallas" displays formatted weather dashboard with current conditions
+- Running py -m src.main 'Dallas' displays the formatted weather dashboard for Dallas without errors
+- Running py -m src.main with no arguments prints a usage message and exits
+- Running py -m src.main 'InvalidCity999' prints a clear error message and exits
 
 **QA Status:** PASS
 **Tech Stack:** requests, python-dotenv, pytest

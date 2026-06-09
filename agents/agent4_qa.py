@@ -20,7 +20,7 @@ def run_agent4(generated_code: str) -> dict:
     print("\n🤖 Agent 4 (QA) is reviewing the code for runtime blockers...\n")
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=2000,
         messages=[
             {

@@ -20,7 +20,7 @@ def run_agent2(project_brief: str) -> str:
     print("\n🤖 Agent 2 (Architect) is creating technical design...\n")
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=3000,
         messages=[
             {

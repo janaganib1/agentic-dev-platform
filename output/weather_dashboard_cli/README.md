@@ -1,51 +1,44 @@
-# Weather Dashboard CLI
+# Weather CLI
 
-A simple command-line weather application that displays current weather information for any city.
+A command-line tool to fetch and display current weather for any city using the OpenWeatherMap API.
 
 ## Setup
 
-1. Clone or download the project
-2. Install dependencies:
+1. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Get a free API key from [OpenWeatherMap](https://openweathermap.org/api)
-
-4. Create a `.env` file in the project root:
+2. **Configure environment**
    ```bash
    cp .env.example .env
+   # Edit .env and add your WEATHER_API_KEY
    ```
 
-5. Edit `.env` and add your API key:
-   ```
-   WEATHER_API_KEY=your_actual_api_key_here
-   WEATHER_API_URL=https://api.openweathermap.org/data/2.5/weather
-   ```
-
-## Usage
-
-Run the weather dashboard with a city name:
+## Run Commands
 
 ```bash
-# Examples
-py -m src.main "Dallas"
-py -m src.main "New York"
-py -m src.main "London"
+# Normal usage — prints formatted weather dashboard
+py -m src.main Dallas
+
+# No argument — prints usage message, exits cleanly
+py -m src.main
+
+# Invalid city — prints user-friendly error message
+py -m src.main FakeCity123
 ```
 
-## Testing
+## Run Tests
 
-Run tests with:
 ```bash
-pytest tests/
+pytest tests/test_main.py
 ```
 
-## Features
+## Environment Variables
 
-- Current weather conditions
-- Temperature in both Celsius and Fahrenheit
-- Weather description
-- Humidity percentage
-- Wind speed
-- Clean, formatted dashboard output
+| Variable | Description | Example |
+|---|---|---|
+| `WEATHER_API_KEY` | OpenWeatherMap API key | `abc123def456` |
+| `WEATHER_BASE_URL` | Base URL for weather API | `https://api.openweathermap.org/data/2.5/weather` |
+
+Get a free API key at https://openweathermap.org/api

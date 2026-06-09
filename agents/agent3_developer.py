@@ -18,13 +18,6 @@ client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
 def parse_multi_file_response(response_text: str) -> dict:
-    """
-    Parses the agent response and extracts multiple files.
-    Expected format:
-        ### FILE: path/to/file.py
-        <code here>
-    Returns a dict: { "path/to/file.py": "<content>", ... }
-    """
     files = {}
     parts = re.split(r'###\s*FILE:\s*', response_text)
     for part in parts[1:]:
@@ -71,18 +64,19 @@ def generate_project_name(text: str) -> str:
     return '_'.join(words) if words else 'generated_project'
 
 
-def run_agent3(technical_design: str, requirement: str = "") -> str:
+def run_agent3(technical_design: str, requirement: str = "", project_folder: str = "") -> str:
     """
     Run the developer agent to generate a complete multi-file Python project.
 
     Args:
         technical_design: Technical design from Agent 2
         requirement: Original user requirement (used for project folder naming)
+        project_folder: Full path to project folder (e.g. output/my_project)
     """
     print("\n🤖 Agent 3 (Developer) is writing the code...\n")
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=16000,
         messages=[
             {
@@ -143,20 +137,6 @@ SCOPE RULES:
 ❌ NEVER add security hardening unless design specifies it
 
 ════════════════════════════════════════
-PRE-OUTPUT CHECKLIST — VERIFY BEFORE RESPONDING
-════════════════════════════════════════
-
-Before writing your response, verify:
-1. ✅ All imports at top of each file will resolve
-2. ✅ requirements.txt lists every non-standard import
-3. ✅ No file cuts off mid-function
-4. ✅ src/__init__.py is empty
-5. ✅ main.py has if __name__ == "__main__": block
-6. ✅ Import hierarchy has no circular dependencies
-7. ✅ No pydantic, no win32com, no click, no httpx anywhere
-8. ✅ test file is complete and under 30 lines
-
-════════════════════════════════════════
 OUTPUT FORMAT — USE EXACTLY THIS FORMAT
 ════════════════════════════════════════
 
@@ -183,9 +163,12 @@ Rules for each file:
     result = response.content[0].text
     files = parse_multi_file_response(result)
 
-    # Use requirement for project name if provided
-    naming_source = requirement if requirement.strip() else technical_design
-    project_name = generate_project_name(naming_source)
+    # Use project_folder if provided, otherwise generate from requirement
+    if project_folder:
+        project_name = os.path.basename(project_folder)
+    else:
+        naming_source = requirement if requirement.strip() else technical_design
+        project_name = generate_project_name(naming_source)
 
     if not files:
         print("⚠️  Could not parse multi-file response. Saving as single file.")
@@ -217,11 +200,6 @@ if __name__ == "__main__":
     ## Technology Stack
     - python-docx: read Word files
     - reportlab: generate PDF
-
-    ## Import Hierarchy
-    config.py → no project imports
-    converter.py → imports config.py
-    main.py → imports converter.py, config.py
 
     ## Files
     src/__init__.py, src/main.py, src/config.py, src/converter.py

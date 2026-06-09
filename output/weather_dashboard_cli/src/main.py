@@ -1,27 +1,39 @@
 import argparse
 import sys
-from .config import get_api_key, get_api_url
-from .weather import fetch_weather_data, format_weather_dashboard
+from src.story1 import get_weather
+from src.story2 import display_weather
 
-def parse_arguments():
-    """Uses argparse to get city name from command line."""
-    parser = argparse.ArgumentParser(description='Get weather information for a city')
-    parser.add_argument('city', help='Name of the city to get weather for')
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Get current weather for a city.",
+        usage="py -m src.main <city>"
+    )
+    parser.add_argument(
+        "city",
+        nargs="?",
+        help="City name to fetch weather for"
+    )
     return parser.parse_args()
 
+
 def main():
-    """Orchestrates the weather dashboard flow."""
-    try:
-        args = parse_arguments()
-        weather_data = fetch_weather_data(args.city)
-        dashboard = format_weather_dashboard(weather_data)
-        print(dashboard)
-    except ValueError as e:
-        print(f"Configuration error: {e}", file=sys.stderr)
+    args = parse_args()
+
+    if not args.city:
+        print("Usage: py -m src.main <city>")
+        print("Example: py -m src.main Dallas")
+        sys.exit(0)
+
+    result = get_weather(args.city)
+
+    if result is None:
+        print(f"Error: Could not find weather for '{args.city}'.")
+        print("Please check the city name and try again.")
         sys.exit(1)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+
+    display_weather(result)
+
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,18 @@
+def display_weather(data: dict) -> None:
+    city = data.get("name", "Unknown")
+    country = data.get("sys", {}).get("country", "Unknown")
+    temp = data.get("main", {}).get("temp", "N/A")
+    feels_like = data.get("main", {}).get("feels_like", "N/A")
+    humidity = data.get("main", {}).get("humidity", "N/A")
+    description = data.get("weather", [{}])[0].get("description", "N/A").capitalize()
+    wind_speed = data.get("wind", {}).get("speed", "N/A")
+
+    print("=" * 40)
+    print(f"  Weather for {city}, {country}")
+    print("=" * 40)
+    print(f"  Condition  : {description}")
+    print(f"  Temperature: {temp} °F")
+    print(f"  Feels Like : {feels_like} °F")
+    print(f"  Humidity   : {humidity}%")
+    print(f"  Wind Speed : {wind_speed} mph")
+    print("=" * 40)
