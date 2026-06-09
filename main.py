@@ -111,11 +111,9 @@ NEVER use pydantic BaseSettings — use python-dotenv with os.getenv() instead.
         input_to_dev += existing_section
 
     code = run_agent3(input_to_dev, requirement=state["requirement"])
-
-    if memory_context.get("mode") in ["enhance", "resume"] and memory_context.get("existing_project_folder") and memory_context.get("same_ticket"):
-        project_folder = memory_context["existing_project_folder"]
-    else:
-        project_folder = state.get("project_folder") or os.path.join("output", generate_project_name(state["requirement"]))
+    
+    # Use the same naming logic as agent3 to find actual folder
+    project_folder = os.path.join("output", generate_project_name(state["requirement"]))
 
     return {
         **state,
