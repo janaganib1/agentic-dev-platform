@@ -14,11 +14,13 @@ from agents.agent4_qa import run_agent4
 from agents.agent5_runtime_fixer import run_agent5
 from agents.agent_github import run_github_agent
 from git_manager import prepare_branch, commit_and_push
+from bitbucket_pr import create_bitbucket_pr
 from memory_manager import add_memory_entry, extract_tech_stack_from_requirements
 
 load_dotenv()
 
-REPO_MODE = os.getenv("REPO_MODE", "personal").lower()
+REPO_MODE  = os.getenv("REPO_MODE", "personal").lower()
+AUTO_PUSH  = os.getenv("AUTO_PUSH", "false").lower() == "true"
 
 
 # ─── State Definition ────────────────────────────────────────────────────────
@@ -393,9 +395,10 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
 
     completed = [r for r in story_results if r["approved"]]
 
-    # Step 4: Push to GitHub (only in webhook/auto_approve mode)
+    # Step 4: Commit, push, and PR
+    # ── Personal mode (webhook/auto_approve) ──────────────────────────────────
     github_result = {}
-    if auto_approve and completed and ticket_id:
+    if REPO_MODE == "personal" and auto_approve and completed and ticket_id:
         print(f"\n{'=' * 50}")
         print("🐙 Pushing to GitHub...")
         github_result = run_github_agent(
@@ -404,19 +407,38 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
         )
         commit_and_push(ticket_id)
 
+    # ── RouteOne mode ──────────────────────────────────────────────────────────
+    bitbucket_result = {}
+    if REPO_MODE == "routeone" and completed and ticket_id:
+        print(f"\n{'=' * 50}")
+        print("📦 RouteOne — committing generated code...")
+        commit_result = commit_and_push(ticket_id)
+
+        # Create PR only if push succeeded (AUTO_PUSH=true)
+        if commit_result.get("pushed"):
+            bitbucket_result = create_bitbucket_pr(ticket_id)
+        elif not commit_result.get("pushed") and commit_result.get("success"):
+            print(f"\n💡 Code committed locally. When ready to push:")
+            print(f"   1. Set AUTO_PUSH=true in .env")
+            print(f"   2. Re-run: py git_manager.py commit {ticket_id}")
+            print(f"   3. Then PR will be created automatically on next push.")
+
     print(f"\n{'=' * 50}")
     print("🏁 PIPELINE COMPLETE")
     print(f"{'=' * 50}")
     print(f"✅ Stories completed: {len(completed)}/{len(stories)}")
     print(f"📁 Project folder: {actual_project_folder}")
     print(f"📋 Summary saved: {summary_path}")
+    if bitbucket_result.get("pr_url"):
+        print(f"🔀 PR created: {bitbucket_result['pr_url']}")
 
     return {
         "stories_completed": len(completed),
         "stories_total": len(stories),
         "project_folder": actual_project_folder,
         "summary_path": summary_path,
-        "github": github_result
+        "github": github_result,
+        "bitbucket_pr": bitbucket_result
     }
 
 
