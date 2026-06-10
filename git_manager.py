@@ -9,6 +9,7 @@ load_dotenv()
 REPO_MODE   = os.getenv("REPO_MODE", "personal").lower()   # personal | routeone
 REPO_PATH   = os.getenv("REPO_PATH", "")                   # C:\Local_Git\routeone
 BASE_BRANCH = os.getenv("BASE_BRANCH", "main")             # main | QA
+AUTO_PUSH   = os.getenv("AUTO_PUSH", "false").lower() == "true"  # false = local commit only
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ def prepare_branch(ticket_id: str) -> dict:
     print(f"   Mode        : {REPO_MODE}")
     print(f"   Base branch : {BASE_BRANCH}")
     print(f"   Branch      : {branch_name}")
+    print(f"   Auto push   : {'enabled' if AUTO_PUSH else 'disabled (local commit only)'}")
 
     # Personal mode — no local repo management needed
     if REPO_MODE == "personal":
@@ -117,7 +119,7 @@ def prepare_branch(ticket_id: str) -> dict:
 
 def commit_and_push(ticket_id: str, commit_message: str = None) -> dict:
     """
-    Commits and pushes generated code after the pipeline completes.
+    Commits (and optionally pushes) generated code after the pipeline completes.
 
     Personal mode:
       - Nothing to do here — agent_github.py handles the push via GitHub API
@@ -125,14 +127,15 @@ def commit_and_push(ticket_id: str, commit_message: str = None) -> dict:
 
     RouteOne mode:
       - Stage all changes in REPO_PATH
-      - Commit with a meaningful message
-      - Push branch to origin
+      - Commit with a meaningful message (always)
+      - Push branch to Bitbucket only if AUTO_PUSH=true in .env
+      - If AUTO_PUSH=false, stops after local commit and prints instructions
     """
     branch_name = f"feature/{ticket_id.lower()}"
-    message = commit_message or f"feat({ticket_id}): AI generated implementation"
+    message = commit_message or f"{ticket_id}: AI generated implementation"
 
     print(f"\n{'=' * 50}")
-    print(f"📤 Git Manager — committing and pushing {ticket_id}")
+    print(f"📤 Git Manager — committing for {ticket_id}")
     print(f"{'=' * 50}")
 
     # Personal mode — agent_github.py handles this
@@ -158,7 +161,6 @@ def commit_and_push(ticket_id: str, commit_message: str = None) -> dict:
     # Step 2: Commit
     success, output = _run_git(["git", "commit", "-m", message], cwd=cwd)
     if not success:
-        # Nothing to commit is not an error
         if "nothing to commit" in output:
             print(f"\n⚠️  Nothing to commit — no changes detected.")
             return {"success": True, "mode": "routeone", "note": "nothing to commit"}
@@ -166,18 +168,35 @@ def commit_and_push(ticket_id: str, commit_message: str = None) -> dict:
         return {"success": False, "error": output}
     print(f"✅ Committed: {message}")
 
-    # Step 3: Push branch
+    # Step 3: Push — only if AUTO_PUSH=true
+    if not AUTO_PUSH:
+        print(f"\n⏸️  AUTO_PUSH=false — skipping push to Bitbucket.")
+        print(f"   Branch '{branch_name}' committed locally in: {REPO_PATH}")
+        print(f"   To push manually when ready:")
+        print(f"   cd {REPO_PATH}")
+        print(f"   git push origin {branch_name}")
+        return {
+            "success": True,
+            "branch": branch_name,
+            "mode": "routeone",
+            "committed": message,
+            "pushed": False,
+            "note": "LOCAL COMMIT ONLY — set AUTO_PUSH=true in .env to enable push"
+        }
+
+    # AUTO_PUSH=true — push to Bitbucket
     success, output = _run_git(["git", "push", "origin", branch_name], cwd=cwd)
     if not success:
         print(f"\n❌ git push failed: {output}")
         return {"success": False, "error": output}
 
-    print(f"✅ Pushed branch: {branch_name}")
+    print(f"✅ Pushed branch to Bitbucket: {branch_name}")
     return {
         "success": True,
         "branch": branch_name,
         "mode": "routeone",
-        "committed": message
+        "committed": message,
+        "pushed": True
     }
 
 
