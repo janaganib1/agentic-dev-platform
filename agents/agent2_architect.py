@@ -5,6 +5,7 @@ Architect Agent that:
 2. Enforces generic technology and architecture rules for ANY domain
 3. Explicitly defines import hierarchy to prevent circular imports
 4. Outputs exact pip packages, run commands, and env vars
+5. (RouteOne mode) Reads R1OD_Agentic_platform.md for team-specific context
 """
 
 import os
@@ -16,8 +17,70 @@ load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
-def run_agent2(project_brief: str) -> str:
+# ─── Platform Context Loader ─────────────────────────────────────────────────
+
+def load_platform_context() -> str:
+    """
+    Loads the R1OD_Agentic_platform.md file for RouteOne mode.
+    Search order:
+      1. AGENT_MD_PATH env var (explicit path set in .env)
+      2. Fallback: R1OD_Agentic_platform.md in the platform root (same dir as main.py)
+    Returns the file contents as a string, or an empty string if not found.
+    """
+    # Primary: explicit path from env
+    agent_md_path = os.getenv("AGENT_MD_PATH", "").strip()
+    if agent_md_path and os.path.isfile(agent_md_path):
+        try:
+            with open(agent_md_path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            print(f"📄 Loaded platform context from: {agent_md_path}")
+            return content
+        except Exception as e:
+            print(f"⚠️  Could not read AGENT_MD_PATH ({agent_md_path}): {e}")
+
+    # Fallback: platform root (directory containing this file → ../R1OD_Agentic_platform.md)
+    fallback_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "R1OD_Agentic_platform.md"
+    )
+    if os.path.isfile(fallback_path):
+        try:
+            with open(fallback_path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            print(f"📄 Loaded platform context from fallback: {fallback_path}")
+            return content
+        except Exception as e:
+            print(f"⚠️  Could not read fallback context ({fallback_path}): {e}")
+
+    print("⚠️  R1OD_Agentic_platform.md not found — proceeding without platform context.")
+    return ""
+
+
+def _build_platform_context_block(platform_context: str) -> str:
+    """Wraps the platform context in a clearly labeled prompt block."""
+    if not platform_context:
+        return ""
+    return f"""
+════════════════════════════════════════
+ROUTEONE TEAM PLATFORM CONTEXT
+════════════════════════════════════════
+The following is your team's internal platform guide.
+Follow ALL conventions, patterns, and tech stack rules described here.
+They override generic defaults where there is a conflict.
+
+{platform_context}
+════════════════════════════════════════
+END OF PLATFORM CONTEXT
+════════════════════════════════════════
+"""
+
+
+# ─── Core Agent ──────────────────────────────────────────────────────────────
+
+def run_agent2(project_brief: str, platform_context: str = "") -> str:
     print("\n🤖 Agent 2 (Architect) is creating technical design...\n")
+
+    platform_block = _build_platform_context_block(platform_context)
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
@@ -31,7 +94,7 @@ CLI tools, web scrapers, automation, games, utilities, and more.
 
 You have received this project brief:
 {project_brief}
-
+{platform_block}
 YOUR JOB:
 Design the SIMPLEST architecture that makes this work.
 The simpler the design, the better. Complexity is a bug, not a feature.
@@ -166,9 +229,11 @@ CRITICAL REMINDERS FOR AGENT 3:
 
 # ─── Approval Loop (RouteOne mode only) ──────────────────────────────────────
 
-def revise_plan(original_plan: str, feedback: str, project_brief: str) -> str:
+def revise_plan(original_plan: str, feedback: str, project_brief: str, platform_context: str = "") -> str:
     """Ask the Architect to revise the change plan based on dev feedback."""
     print("\n🔄 Architect is revising the plan based on your feedback...\n")
+
+    platform_block = _build_platform_context_block(platform_context)
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
@@ -186,7 +251,7 @@ The developer has reviewed it and provided this feedback:
 
 Original project brief for context:
 {project_brief}
-
+{platform_block}
 Please revise the change plan based on the feedback.
 Keep the same structured format as before.
 Only change what the feedback asks for — do not alter unrelated parts."""
@@ -204,8 +269,11 @@ def architect_approval_loop(project_brief: str) -> str:
     Loops until dev approves.
     Returns the final approved technical design.
     """
+    # Load platform context once — reused across all revisions
+    platform_context = load_platform_context()
+
     # Step 1: Generate initial plan
-    design = run_agent2(project_brief)
+    design = run_agent2(project_brief, platform_context=platform_context)
     revision_count = 0
     max_revisions = 5
 
@@ -236,7 +304,8 @@ def architect_approval_loop(project_brief: str) -> str:
         design = revise_plan(
             original_plan=design,
             feedback=user_input,
-            project_brief=project_brief
+            project_brief=project_brief,
+            platform_context=platform_context
         )
 
         # Show revised plan
