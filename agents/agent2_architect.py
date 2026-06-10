@@ -164,6 +164,93 @@ CRITICAL REMINDERS FOR AGENT 3:
     return result
 
 
+# ─── Approval Loop (RouteOne mode only) ──────────────────────────────────────
+
+def revise_plan(original_plan: str, feedback: str, project_brief: str) -> str:
+    """Ask the Architect to revise the change plan based on dev feedback."""
+    print("\n🔄 Architect is revising the plan based on your feedback...\n")
+
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=3000,
+        messages=[
+            {
+                "role": "user",
+                "content": f"""You are a senior software architect.
+
+You previously produced this change plan:
+{original_plan}
+
+The developer has reviewed it and provided this feedback:
+{feedback}
+
+Original project brief for context:
+{project_brief}
+
+Please revise the change plan based on the feedback.
+Keep the same structured format as before.
+Only change what the feedback asks for — do not alter unrelated parts."""
+            }
+        ]
+    )
+    return response.content[0].text
+
+
+def architect_approval_loop(project_brief: str) -> str:
+    """
+    RouteOne mode only.
+    Runs the Architect agent and shows the change plan to the dev in CLI.
+    Dev can approve or provide feedback for revision.
+    Loops until dev approves.
+    Returns the final approved technical design.
+    """
+    # Step 1: Generate initial plan
+    design = run_agent2(project_brief)
+    revision_count = 0
+    max_revisions = 5
+
+    while revision_count < max_revisions:
+        # Step 2: Show approval prompt
+        print("\n" + "=" * 60)
+        print("🏗️  ARCHITECT CHANGE PLAN — REVIEW REQUIRED")
+        print("=" * 60)
+        print("\nType 'approve' to proceed to code generation.")
+        print("Or type your feedback to request a revision.")
+        print("-" * 60)
+
+        user_input = input("\nYour response: ").strip()
+
+        # Step 3: Check if approved
+        if user_input.lower() in ["approve", "approved", "yes", "y", "ok", "lgtm"]:
+            print("\n✅ Plan approved — proceeding to Developer agent.")
+            return design
+
+        # Step 4: Handle empty input
+        if not user_input:
+            print("\n⚠️  No input received. Please type 'approve' or provide feedback.")
+            continue
+
+        # Step 5: Revise based on feedback
+        revision_count += 1
+        print(f"\n📝 Revision {revision_count}/{max_revisions}...")
+        design = revise_plan(
+            original_plan=design,
+            feedback=user_input,
+            project_brief=project_brief
+        )
+
+        # Show revised plan
+        print("\n" + "=" * 60)
+        print(f"🔄 REVISED CHANGE PLAN (Revision {revision_count})")
+        print("=" * 60)
+        print(design)
+        print("=" * 60)
+
+    # Max revisions reached
+    print(f"\n⚠️  Maximum revisions ({max_revisions}) reached. Proceeding with latest plan.")
+    return design
+
+
 if __name__ == "__main__":
     sample_brief = """
     ## Goal
