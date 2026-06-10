@@ -8,7 +8,7 @@ from typing import TypedDict
 from agents.agent0_memory import run_agent0
 from agents.agent05_story_splitter import run_agent05
 from agents.agent1_orchestrator import run_agent1
-from agents.agent2_architect import run_agent2
+from agents.agent2_architect import run_agent2, architect_approval_loop
 from agents.agent3_developer import run_agent3, generate_project_name
 from agents.agent4_qa import run_agent4
 from agents.agent5_runtime_fixer import run_agent5
@@ -17,6 +17,8 @@ from git_manager import prepare_branch, commit_and_push
 from memory_manager import add_memory_entry, extract_tech_stack_from_requirements
 
 load_dotenv()
+
+REPO_MODE = os.getenv("REPO_MODE", "personal").lower()
 
 
 # ─── State Definition ────────────────────────────────────────────────────────
@@ -68,7 +70,14 @@ def architect_node(state: AgentState) -> AgentState:
         existing_code_section = "\n\nEXISTING CODE TO BUILD ON:\n"
         for path, content in existing_files.items():
             existing_code_section += f"\n### {path}\n{content}\n"
-    design = run_agent2(state["project_brief"] + existing_code_section)
+    project_brief = state["project_brief"] + existing_code_section
+
+    # RouteOne mode — show plan to dev for approval before proceeding
+    if REPO_MODE == "routeone" and not state.get("auto_approve"):
+        design = architect_approval_loop(project_brief)
+    else:
+        design = run_agent2(project_brief)
+
     return {**state, "technical_design": design}
 
 
@@ -111,7 +120,7 @@ NEVER use pydantic BaseSettings — use python-dotenv with os.getenv() instead.
         input_to_dev += existing_section
 
     code = run_agent3(input_to_dev, requirement=state["requirement"])
-    
+
     # Use the same naming logic as agent3 to find actual folder
     project_folder = os.path.join("output", generate_project_name(state["requirement"]))
 
@@ -382,7 +391,6 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
     )
     summary_path = save_summary(summary_md, actual_project_folder)
 
-
     completed = [r for r in story_results if r["approved"]]
 
     # Step 4: Push to GitHub (only in webhook/auto_approve mode)
@@ -395,12 +403,12 @@ def run_full_pipeline(requirement: str, ticket_id: str = None, auto_approve: boo
             local_folder=actual_project_folder
         )
         commit_and_push(ticket_id)
- 
+
     print(f"\n{'=' * 50}")
     print("🏁 PIPELINE COMPLETE")
     print(f"{'=' * 50}")
     print(f"✅ Stories completed: {len(completed)}/{len(stories)}")
-    print(f"📁 Project folder: {project_folder}")
+    print(f"📁 Project folder: {actual_project_folder}")
     print(f"📋 Summary saved: {summary_path}")
 
     return {
